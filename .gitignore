@@ -1,0 +1,5 @@
+.env
+vendor/
+.serverless/
+node_modules/
+*.log

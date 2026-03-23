@@ -1,0 +1,31 @@
+﻿{
+  "success": "true",
+  "action": "authorize",
+  "merchant_code": "b0deb6f3-e51a-48a7-9268-f1441d46f7bd",
+  "merchant_operation_number": "2391645",
+  "transaction": {
+    "transaction_id": "5hk8rwa3h3cq9oyfs3a28v1ms",
+    "state": "AUTORIZADO",
+    "amount": "15000",
+    "currency": "604",
+    "processor_response": {
+      "date": "17-01-2024 12:27:46",
+      "authorization_code": "055552",
+      "result_message": {
+        "code": "00",
+        "description": "Approval and completed successfully"
+      }
+    }
+  },
+  "meta": {
+    "status": {
+      "code": "00",
+      "message_ilgn": [
+        {
+          "locale": "es_PE",
+          "value": "Procesado correctamente"
+        }
+      ]
+    }
+  }
+}

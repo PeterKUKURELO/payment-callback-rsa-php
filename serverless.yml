@@ -1,0 +1,35 @@
+service: s2s-callback
+frameworkVersion: "3"
+useDotenv: true
+
+provider:
+  name: aws
+  stage: ${opt:stage, env:APP_ENV, 'prod'}
+  region: ${opt:region, env:AWS_REGION, 'us-east-1'}
+  runtime: provided.al2
+  logRetentionInDays: 14
+  httpApi:
+    payload: "2.0"
+  environment:
+    APP_ENV: ${self:provider.stage}
+    PUBLIC_KEY_PATH: ${env:PUBLIC_KEY_PATH, 'src/Config/public.pem'}
+
+plugins:
+  - ./vendor/bref/bref
+
+functions:
+  callback:
+    description: Handle payment callback with RSA signature validation
+    handler: src/Handler.php
+    timeout: 10
+    memorySize: 512
+    layers:
+      - ${bref:layer.php-82}
+    events:
+      - httpApi:
+          path: /callback
+          method: POST
+
+package:
+  patterns:
+    - "!tests/**"

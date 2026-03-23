@@ -1,0 +1,30 @@
+{
+  "name": "pay-me/s2s-callback",
+  "description": "S2S payment callback handler with RSA SHA512 signature validation for AWS Lambda",
+  "type": "project",
+  "license": "proprietary",
+  "require": {
+    "php": "^8.2",
+    "ext-openssl": "*",
+    "bref/bref": "^2.1"
+  },
+  "require-dev": {
+    "phpunit/phpunit": "^10.5"
+  },
+  "autoload": {
+    "psr-4": {
+      "App\\": "src/"
+    }
+  },
+  "autoload-dev": {
+    "psr-4": {
+      "Tests\\": "tests/"
+    }
+  },
+  "scripts": {
+    "serve": "php -S 127.0.0.1:8000 -t public",
+    "test": "phpunit",
+    "deploy": "npx serverless deploy --stage preprod --region us-east-1",
+    "info:preprod": "npx serverless info --stage preprod --region us-east-1"
+  }
+}
