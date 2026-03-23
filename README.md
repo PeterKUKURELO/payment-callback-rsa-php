@@ -60,7 +60,7 @@ composer serve
 Endpoint local:
 
 ```text
-POST http://127.0.0.1:8000/callback
+POST http://127.0.0.1:7071/callback
 ```
 
 ## Ejemplo de JSON de callback
@@ -111,7 +111,7 @@ openssl dgst -sha512 -sign private.pem -binary payload.json | openssl base64 -A 
 Enviar callback:
 
 ```bash
-curl -X POST "http://127.0.0.1:8000/callback" \
+curl -X POST "http://127.0.0.1:7071/callback" \
   -H "Content-Type: application/json" \
   -H "signature: $(cat signature.txt)" \
   --data-binary @payload.json

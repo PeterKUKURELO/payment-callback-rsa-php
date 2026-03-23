@@ -22,7 +22,7 @@
     }
   },
   "scripts": {
-    "serve": "php -S 127.0.0.1:8000 -t public",
+    "serve": "php -S 127.0.0.1:7071 -t public",
     "test": "phpunit",
     "deploy": "npx serverless deploy --stage preprod --region us-east-1",
     "info:preprod": "npx serverless info --stage preprod --region us-east-1"
