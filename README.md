@@ -1,8 +1,64 @@
-# S2S Callback en PHP 8.2 (AWS Lambda + Bref)
+# Payment Callback RSA PHP
 
-Proyecto para procesar callbacks de pagos Server-to-Server validando firma `SHA512withRSA` (`openssl_verify`) sin modificar el JSON RAW antes de validar.
+![PHP](https://img.shields.io/badge/PHP-8.2-777BB4?logo=php&logoColor=white)
+![Serverless](https://img.shields.io/badge/Serverless-AWS-FD5750?logo=serverless&logoColor=white)
+![Status](https://img.shields.io/badge/status-production--oriented-2EA44F)
 
-## Estructura
+Production-oriented PHP 8.2 callback handler for payment gateway notifications, validating `SHA512withRSA` signatures with `openssl_verify`, preserving raw JSON integrity, and applying idempotent processing.
+
+## Overview
+
+This project processes Server-to-Server (S2S) payment callbacks securely by:
+
+- validating RSA signatures with `SHA512withRSA`
+- preserving the raw payload exactly as received before verification
+- preventing duplicate processing through idempotency checks
+- supporting both AWS Lambda (Serverless + Bref) and VPS deployments
+
+## Features
+
+- RSA signature validation using OpenSSL
+- raw payload verification with no JSON mutation
+- idempotent callback handling
+- clean architecture (`Controller -> Services -> Repository`)
+- local testing with PHP built-in server
+- AWS Lambda deployment with Bref
+- VPS deployment behind Nginx + HTTPS
+- basic CI with lint + PHPUnit
+
+## Architecture
+
+```text
+Payment Gateway
+        |
+        v
+PaymentController
+        |
+        +--> SignatureService
+        |
+        +--> PaymentService
+                |
+                +--> IdempotencyService
+                |
+                +--> PaymentRepository
+```
+
+Detailed documentation:
+
+- [docs/architecture.md](docs/architecture.md)
+- [docs/flow.md](docs/flow.md)
+
+## Tech Stack
+
+- PHP 8.2
+- OpenSSL
+- PHPUnit
+- AWS Lambda + Bref
+- Serverless Framework
+- Nginx
+- Composer
+
+## Project Structure
 
 ```text
 src/
@@ -14,56 +70,85 @@ src/
   Config/public.pem
   Config/config.php
   Handler.php
+
 public/
   index.php
+
+docs/
+  architecture.md
+  flow.md
+
 tests/
+  SignatureServiceTest.php
+
 scripts/
   deploy.sh
   deploy.ps1
+
 examples/
   callback.json
+
+.github/
+  workflows/ci.yml
+
 composer.json
 serverless.yml
 .env.example
 ```
 
-## Requisitos
+## Requirements
 
 - PHP 8.2
 - Composer
 - Serverless Framework
-- Credenciales AWS configuradas
+- AWS credentials configured for Lambda deployments
 
-## Configuracion
-
-1. Copia variables de entorno:
-
-```bash
-cp .env.example .env
-```
-
-2. Reemplaza `src/Config/public.pem` con la llave publica real de la pasarela.
-3. Configura AWS credentials (`aws configure`) en la maquina donde haras el deploy.
-
-## Instalacion
+## Installation
 
 ```bash
 composer install
 ```
 
-## Prueba local
+## Configuration
+
+```bash
+cp .env.example .env
+```
+
+Then:
+
+1. Replace `src/Config/public.pem` with the real payment gateway public key.
+2. Configure AWS credentials when deploying to Lambda:
+
+```bash
+aws configure
+```
+
+## Running Locally
 
 ```bash
 composer serve
 ```
 
-Endpoint local:
+Endpoint:
 
 ```text
 POST http://127.0.0.1:7071/callback
 ```
 
-## Ejemplo de JSON de callback
+## Callback Validation Flow
+
+1. Receive HTTP request.
+2. Read the raw body from `php://input`.
+3. Extract the `signature` header.
+4. Validate the signature with the RSA public key.
+5. Decode and validate the JSON payload.
+6. Check idempotency using `merchant_operation_number`.
+7. Store or update the transaction result.
+
+See the full flow in [docs/flow.md](docs/flow.md).
+
+## Example Payload
 
 ```json
 {
@@ -99,16 +184,14 @@ POST http://127.0.0.1:7071/callback
 }
 ```
 
-## Ejemplo de firma y request
-
-Firma del body RAW (sin formatear ni alterar):
+## Signature Generation For Testing
 
 ```bash
 cp examples/callback.json payload.json
 openssl dgst -sha512 -sign private.pem -binary payload.json | openssl base64 -A > signature.txt
 ```
 
-Enviar callback:
+## Test Request
 
 ```bash
 curl -X POST "http://127.0.0.1:7071/callback" \
@@ -117,108 +200,64 @@ curl -X POST "http://127.0.0.1:7071/callback" \
   --data-binary @payload.json
 ```
 
-## Deploy a AWS Lambda
+## Deployment On AWS Lambda
 
 ```bash
 composer install --no-dev -o
 npx serverless deploy
 ```
 
-Endpoint desplegado:
+Get the deployed endpoint:
 
-```text
-POST /callback
+```bash
+npx serverless info --stage preprod --region us-east-1
 ```
 
-## Deploy rapido (recomendado)
+## Quick Deploy
 
-Linux/CentOS:
+Linux:
 
 ```bash
 chmod +x scripts/deploy.sh
 ./scripts/deploy.sh preprod us-east-1
 ```
 
-Windows/PowerShell:
+Windows:
 
 ```powershell
 .\scripts\deploy.ps1 -Stage preprod -Region us-east-1
 ```
 
-## Ver endpoint despues del deploy
+## VPS Deployment (Nginx + HTTPS)
 
-```bash
-npx serverless info --stage preprod --region us-east-1
+### Architecture
+
+```text
+Internet (Payment Gateway)
+        |
+        v
+https://your-domain/callback
+        |
+        v
+Nginx
+        |
+        v
+PHP Server (127.0.0.1:7071)
+        |
+        v
+Application
 ```
 
-Busca la URL base del HTTP API y agrega `/callback`.
+### Requirements
 
-# 🌐 Deploy en VPS (Nginx + DuckDNS + HTTPS)
-
-También es posible desplegar el endpoint sin AWS Lambda, utilizando un servidor VPS con Nginx como reverse proxy.
-
-## Arquitectura
-
-
-Internet (Pay-me)
-↓
-https://paymentcallback.duckdns.org/callback
-
-↓
-Nginx (80/443)
-↓
-PHP Server (127.0.0.1:7071)
-↓
-Aplicación (PaymentController)
-
-
----
-
-## Requisitos adicionales
-
-- Servidor Linux (CentOS recomendado)
+- Linux server
 - Nginx
-- Certbot (Let's Encrypt)
-- Dominio gratuito (DuckDNS)
+- Certbot
+- Domain or subdomain
 
----
+### Nginx Configuration
 
-## Configuración de dominio (DuckDNS)
-
-1. Crear dominio en: https://www.duckdns.org  
-   Ejemplo:
-
-
-paymentcallback.duckdns.org
-
-
-2. Configurar actualización automática:
-
-```bash
-mkdir -p /root/duckdns
-nano /root/duckdns/update.sh
-echo url="https://www.duckdns.org/update?domains=paymentcallback&token=TU_TOKEN&ip=" | curl -k -o /root/duckdns/duck.log -K -
-
-Permisos:
-
-chmod 700 /root/duckdns/update.sh
-
-Probar:
-
-bash /root/duckdns/update.sh
-cat /root/duckdns/duck.log
-
-Debe responder:
-
-OK
-Configuración de Nginx
-
-Crear archivo:
-
-nano /etc/nginx/conf.d/payment-callback.conf
-
-Contenido:
-
+```nginx
 server {
     listen 80;
     server_name paymentcallback.duckdns.org;
@@ -228,71 +267,116 @@ server {
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
     }
 }
+```
 
-Validar y reiniciar:
+### Start PHP Server
 
-nginx -t
-systemctl restart nginx
-Levantar servidor PHP
+```bash
 php -S 127.0.0.1:7071 -t public
+```
 
-O en background:
+Background mode:
 
+```bash
 nohup php -S 127.0.0.1:7071 -t public > /tmp/payment-callback.log 2>&1 &
+```
 
-Verificar:
+### Enable HTTPS
 
-ss -lntp | grep 7071
-Configurar HTTPS (Let's Encrypt)
+```bash
 dnf install certbot python3-certbot-nginx -y
 certbot --nginx -d paymentcallback.duckdns.org
+```
 
-Resultado:
+Final endpoint:
 
-https://paymentcallback.duckdns.org/callback
-Endpoint final
+```text
 POST https://paymentcallback.duckdns.org/callback
-Verificación
+```
+
+## Verification
+
+```bash
 curl -X POST "https://paymentcallback.duckdns.org/callback" \
   -H "Content-Type: application/json" \
   -H "signature: test" \
   --data '{}'
+```
 
-Respuesta esperada:
+Expected response:
 
-{"message":"Missing signature header."}
-Logs
-Nginx (requests)
+```json
+{"message":"Invalid signature."}
+```
+
+## Logs
+
+```bash
 tail -f /var/log/nginx/access.log
-
-Ejemplo:
-
-POST /callback HTTP/1.1" 200
-Nginx (errores)
 tail -f /var/log/nginx/error.log
-Aplicación PHP
 tail -f /tmp/payment-callback.log
-Debug de payload (opcional)
+```
 
-Agregar en PaymentController.php:
+## Debug (Optional)
 
+```php
 file_put_contents('/tmp/callback_debug.log', file_get_contents('php://input') . PHP_EOL, FILE_APPEND);
+```
 
-Ver:
+## Security Notes
 
-tail -f /tmp/callback_debug.log
-Notas importantes
-El endpoint debe ser HTTPS obligatorio para producción.
-No se debe modificar el JSON antes de validar la firma.
-Usar --data-binary en pruebas para preservar el RAW body.
-No es necesario private.pem en producción (solo public.pem).
-Estado del despliegue
-✔ Dominio activo (DuckDNS)
-✔ Nginx configurado
-✔ HTTPS activo (Let's Encrypt)
-✔ Backend funcionando
-✔ Endpoint público operativo
-✔ Recepción de callbacks validada
+- Do not modify raw JSON before signature validation.
+- Always use HTTPS in production.
+- Never expose private keys.
+- Use `--data-binary` to preserve payload integrity.
+
+## Idempotency Strategy
+
+- Unique `merchant_operation_number`
+- prevent duplicate processing
+- safe retries from the gateway
+
+Current repository storage is in-memory and useful for local/demo flows. For real production idempotency across processes or cold starts, replace `PaymentRepository` with a persistent backend such as DynamoDB, RDS, or Redis.
+
+## Tests
+
+Run tests locally:
+
+```bash
+composer test
+```
+
+Current automated coverage includes:
+
+- `SignatureService` happy path verification
+- invalid signature rejection
+- malformed Base64 rejection
+
+## CI
+
+GitHub Actions runs:
+
+- `composer install`
+- PHP lint
+- PHPUnit tests
+
+Workflow file:
+
+- [`.github/workflows/ci.yml`](.github/workflows/ci.yml)
+
+## Status
+
+- [x] RSA signature validation
+- [x] Raw payload integrity
+- [x] Idempotent processing
+- [x] AWS deployment
+- [x] VPS deployment
+- [x] Basic test coverage
+- [x] Basic CI pipeline
+
+## Author
+
+Peter Kukurelo  
+Backend Developer | Payment Integrations
