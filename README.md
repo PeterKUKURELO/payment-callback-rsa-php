@@ -7,6 +7,15 @@
 
 Callback handler S2S en PHP 8.2 para notificaciones de pagos, con validación de firma `SHA512withRSA`, preservación del payload RAW e idempotencia en el procesamiento.
 
+## Qué soluciona
+
+En integraciones de pago, un callback mal validado puede generar fraudes, reprocesos, inconsistencias contables o pérdida de trazabilidad. Este proyecto resuelve ese problema asegurando que cada notificación:
+
+- provenga realmente de la pasarela mediante validación RSA
+- mantenga la integridad exacta del payload recibido
+- no se procese dos veces ante reintentos del gateway
+- pueda desplegarse en entornos reales como AWS Lambda o VPS
+
 ## Qué demuestra este proyecto
 
 Este repositorio está pensado como pieza de portafolio backend enfocada en integraciones de pago y despliegue real. Muestra:
