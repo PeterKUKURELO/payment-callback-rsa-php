@@ -22,29 +22,32 @@ final class PaymentController
      * @param array<string, mixed> $headers
      * @return array{statusCode:int, body:array<string, mixed>}
      */
-    public function handle(string $rawBody, array $headers): array
+    public function handle(string $rawBody, array $headers, ?string $sourceIp = null): array
     {
         $payload = null;
+        $sourceIp = $this->normalizeSourceIp($sourceIp);
+
+        error_log(sprintf('Callback received from IP %s', $sourceIp ?? 'unknown'));
 
         try {
             $signature = $this->getHeaderValue($headers, 'signature');
             if ($signature === null || trim($signature) === '') {
                 return $this->response(400, [
                     'message' => 'Missing signature header.',
-                ]);
+                ], $sourceIp);
             }
 
             if (!$this->signatureService->verify($rawBody, $signature)) {
                 return $this->response(400, [
                     'message' => 'Invalid signature.',
-                ]);
+                ], $sourceIp);
             }
 
             $payload = json_decode($rawBody, true, 512, JSON_THROW_ON_ERROR);
             if (!is_array($payload)) {
                 return $this->response(400, [
                     'message' => 'Invalid JSON payload.',
-                ]);
+                ], $sourceIp);
             }
 
             $result = $this->paymentService->process($payload);
@@ -52,24 +55,24 @@ final class PaymentController
             return $this->response(200, [
                 'message' => 'Callback processed successfully.',
                 'data' => $result,
-            ]);
+            ], $sourceIp);
         } catch (JsonException $exception) {
             error_log(sprintf('JSON decode error: %s', $exception->getMessage()));
-            $this->logUnexpectedFormat($rawBody, null, 'Malformed JSON body.');
+            $this->logUnexpectedFormat($rawBody, null, 'Malformed JSON body.', $sourceIp);
             return $this->response(400, [
                 'message' => 'Malformed JSON body.',
-            ]);
+            ], $sourceIp);
         } catch (InvalidArgumentException $exception) {
             error_log(sprintf('Validation error: %s', $exception->getMessage()));
-            $this->logUnexpectedFormat($rawBody, is_array($payload) ? $payload : null, $exception->getMessage());
+            $this->logUnexpectedFormat($rawBody, is_array($payload) ? $payload : null, $exception->getMessage(), $sourceIp);
             return $this->response(400, [
                 'message' => $exception->getMessage(),
-            ]);
+            ], $sourceIp);
         } catch (Throwable $exception) {
             error_log(sprintf('Unhandled callback error: %s', $exception->getMessage()));
             return $this->response(500, [
                 'message' => 'Internal server error.',
-            ]);
+            ], $sourceIp);
         }
     }
 
@@ -99,8 +102,16 @@ final class PaymentController
      * @param array<string, mixed> $body
      * @return array{statusCode:int, body:array<string, mixed>}
      */
-    private function response(int $statusCode, array $body): array
+    private function response(int $statusCode, array $body, ?string $sourceIp = null): array
     {
+        if ($sourceIp !== null) {
+            $body['received_from_ip'] = $sourceIp;
+
+            if (isset($body['data']) && is_array($body['data'])) {
+                $body['data']['received_from_ip'] = $sourceIp;
+            }
+        }
+
         return [
             'statusCode' => $statusCode,
             'body' => $body,
@@ -110,17 +121,29 @@ final class PaymentController
     /**
      * @param array<string, mixed>|null $payload
      */
-    private function logUnexpectedFormat(string $rawBody, ?array $payload, string $reason): void
+    private function logUnexpectedFormat(string $rawBody, ?array $payload, string $reason, ?string $sourceIp = null): void
     {
         $keys = $payload !== null ? implode(',', array_keys($payload)) : 'N/A';
         $preview = substr($rawBody, 0, 1200);
         $preview = str_replace(["\r", "\n"], ['\\r', '\\n'], $preview);
 
         error_log(sprintf(
-            'Unexpected callback format. reason="%s" top_level_keys="%s" raw_preview="%s"',
+            'Unexpected callback format. source_ip="%s" reason="%s" top_level_keys="%s" raw_preview="%s"',
+            $sourceIp ?? 'unknown',
             $reason,
             $keys,
             $preview
         ));
+    }
+
+    private function normalizeSourceIp(?string $sourceIp): ?string
+    {
+        if ($sourceIp === null) {
+            return null;
+        }
+
+        $sourceIp = trim($sourceIp);
+
+        return $sourceIp === '' ? null : $sourceIp;
     }
 }

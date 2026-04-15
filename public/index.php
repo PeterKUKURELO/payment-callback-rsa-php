@@ -6,6 +6,7 @@ use App\Controllers\PaymentController;
 use App\Repositories\PaymentRepository;
 use App\Services\IdempotencyService;
 use App\Services\PaymentService;
+use App\Services\RequestIpResolver;
 use App\Services\SignatureService;
 
 require dirname(__DIR__) . '/vendor/autoload.php';
@@ -16,6 +17,7 @@ $paymentRepository = new PaymentRepository();
 $idempotencyService = new IdempotencyService($paymentRepository);
 $paymentService = new PaymentService($paymentRepository, $idempotencyService);
 $signatureService = new SignatureService((string) $config['public_key_path']);
+$requestIpResolver = new RequestIpResolver();
 $controller = new PaymentController($signatureService, $paymentService);
 
 $path = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH);
@@ -44,7 +46,8 @@ if (!is_array($headers) || $headers === []) {
     }
 }
 
-$response = $controller->handle($rawBody, $headers);
+$sourceIp = $requestIpResolver->fromPhpRequest($_SERVER, $headers);
+$response = $controller->handle($rawBody, $headers, $sourceIp);
 
 http_response_code($response['statusCode']);
 header('Content-Type: application/json');
